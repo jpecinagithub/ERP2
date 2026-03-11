@@ -1,0 +1,17 @@
+# Variables de entorno
+.env
+
+# Node modules
+node_modules/
+
+# Logs
+logs
+*.log
+
+# Coverage
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+

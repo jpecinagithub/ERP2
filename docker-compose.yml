@@ -1,0 +1,21 @@
+version: '3.8'
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: erp2-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ERP2
+      MYSQL_USER: erp_user
+      MYSQL_PASSWORD: erp_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql-data:/var/lib/mysql
+    networks:
+      - ERP2net
+
+networks:
+  ERP2net:
+    driver: bridge

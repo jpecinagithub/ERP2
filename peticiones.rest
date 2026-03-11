@@ -1,0 +1,85 @@
+@url = http://localhost:3000/api
+
+GET     {{url}}/    
+
+### Health
+GET     {{url}}/health
+
+###
+GET     {{url}}/users
+GET     {{url}}/users/1
+
+### Auth: login
+POST   {{url}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "usuario",
+  "password": "contrasena"
+}
+
+### Auth: register
+POST   {{url}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "nuevo",
+  "password": "contrasena",
+  "email": "nuevo@example.com"
+}
+
+### Products
+GET     {{url}}/products
+POST   {{url}}/products
+Content-Type: application/json
+
+{
+  "name": "Producto de prueba",
+  "price": 19.99,
+  "stock": 50
+}
+
+### Users: create
+POST   {{url}}/users
+Content-Type: application/json
+
+{
+  "username": "usuario2",
+  "password": "contrasena",
+  "email": "usuario2@example.com"
+}
+
+### Users: update
+PUT    {{url}}/users/1
+Content-Type: application/json
+
+{
+  "email": "nuevoemail@example.com"
+}
+
+### Users: delete
+DELETE {{url}}/users/5
+
+### Products: update
+PUT    {{url}}/products/1
+Content-Type: application/json
+
+{
+  "name": "Producto de prueba actualizado",
+  "price": 24.99,
+  "stock": 60
+}
+
+### Products: delete
+DELETE {{url}}/products/1
+
+### Auth: refresh
+POST   {{url}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "TU_TOKEN_DE_REFRESCO"
+}
+
+### Health: ping
+GET    {{url}}/health
