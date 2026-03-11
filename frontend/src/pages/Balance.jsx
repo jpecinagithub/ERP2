@@ -14,50 +14,37 @@ function GroupedBalance({ title, accounts, accountType }) {
   const totalDebit = accounts.reduce((sum, a) => sum + (Number(a.total_debit) || 0), 0);
   const totalCredit = accounts.reduce((sum, a) => sum + (Number(a.total_credit) || 0), 0);
   
-  // Para pasivo y patrimonio, el saldo debe mostrarse positivo (invertir el signo)
-  // Para ingresos (grupo 7): signo positivo
-  // Para gastos (grupo 6): signo negativo
-  const isPasivoOrPatrimonio = accountType === 'pasivo' || accountType === 'patrimonio';
-  const isIngreso = accountType === 'ingreso';
-  const isGasto = accountType === 'gasto';
-  
-  const totalBalance = accounts.reduce((sum, a) => {
-    const balance = Number(a.balance) || 0;
-    if (isPasivoOrPatrimonio) {
-      return sum + (-balance); // Invertir signo para pasivo y patrimonio
-    } else if (isGasto) {
-      return sum + (-Math.abs(balance)); // Siempre negativo para gastos
+  // Para el informe de PyG, formateamos el saldo según el tipo de cuenta:
+  // - Ingresos (grupo 7): siempre positivo (es un ingreso)
+  // - Gastos (grupo 6): siempre negativo (es un gasto)
+  // - Activo, Pasivo, Patrimonio: saldo natural
+  const formatBalanceForType = (balance, type) => {
+    const numBalance = Number(balance) || 0;
+    if (type === 'ingreso') {
+      // Ingresos siempre positivos
+      return Math.abs(numBalance);
+    } else if (type === 'gasto') {
+      // Gastos siempre negativos
+      return -Math.abs(numBalance);
     }
-    return sum + balance; // Activo e ingresos como están
+    // Activo, Pasivo, Patrimonio: tal cual
+    return numBalance;
+  };
+
+  const totalBalance = accounts.reduce((sum, a) => {
+    return sum + formatBalanceForType(a.balance, accountType);
   }, 0);
 
   if (filteredAccounts.length === 0) return null;
 
-  // Función para formatear el saldo considerando el tipo de cuenta
+  // Función para formatear el saldo según el tipo de cuenta
   const formatBalance = (balance) => {
-    const numBalance = Number(balance) || 0;
-    let displayBalance;
-    if (isPasivoOrPatrimonio) {
-      displayBalance = -numBalance; // Invertir signo para pasivo y patrimonio
-    } else if (isGasto) {
-      displayBalance = -Math.abs(numBalance); // Siempre negativo para gastos
-    } else {
-      displayBalance = numBalance; // Activo e ingresos como están
-    }
-    return formatMoney(displayBalance);
+    return formatMoney(formatBalanceForType(balance, accountType));
   };
 
   // Función para determinar el color del saldo
   const getBalanceColor = (balance) => {
-    const numBalance = Number(balance) || 0;
-    let displayBalance;
-    if (isPasivoOrPatrimonio) {
-      displayBalance = -numBalance;
-    } else if (isGasto) {
-      displayBalance = -Math.abs(numBalance);
-    } else {
-      displayBalance = numBalance;
-    }
+    const displayBalance = formatBalanceForType(balance, accountType);
     return displayBalance >= 0 ? 'text-emerald-400' : 'text-rose-400';
   };
 
@@ -113,30 +100,37 @@ function generateBalanceSheetPDF(accounts) {
   const colorPasivo = [178, 34, 34];    // Rojo oscuro
   const colorPatrimonio = [70, 130, 180]; // Azul acero
   
+  // Para el Balance de Situación: todos los saldos deben ser positivos
+  // - Activo: saldo natural ya viene positivo si está en el Debe
+  // - Pasivo: saldo natural ya viene positivo si está en el Haber
+  // - Patrimonio: saldo natural ya viene positivo si está en el Haber
+  // El resultado (129) va en pasivo: positivo si es beneficio, negativo si es pérdida
   const activo = accounts.filter(a => a.account_type === 'activo' && Number(a.balance) !== 0);
   const pasivoOriginal = accounts.filter(a => a.account_type === 'pasivo' && Number(a.balance) !== 0);
   const patrimonio = accounts.filter(a => a.account_type === 'patrimonio' && Number(a.balance) !== 0 && a.code !== '129');
   
-  // Obtener resultado del ejercicio
+  // Obtener resultado del ejercicio para Balance de Situación
+  // Ingresos siempre positivos, gastos siempre negativos para PyG
   const ingresos = accounts.filter(a => a.account_type === 'ingreso');
   const gastos = accounts.filter(a => a.account_type === 'gasto');
-  const totalIngresos = ingresos.reduce((sum, a) => sum + Number(a.balance), 0);
-  const totalGastos = gastos.reduce((sum, a) => sum + Number(a.balance), 0);
-  const resultado = totalIngresos - totalGastos;
+  const totalIngresos = ingresos.reduce((sum, a) => sum + Math.abs(Number(a.balance)), 0);
+  const totalGastos = gastos.reduce((sum, a) => sum + Math.abs(Number(a.balance)), 0);
+  const resultado = totalIngresos - totalGastos; // Positivo = beneficio, negativo = pérdida
   
-  // Cuenta 129 (resultado) incluida en pasivo
+  // Cuenta 129 (resultado) incluida en pasivo - siempre positiva para el balance
   const resultado129 = accounts.find(a => a.code === '129');
   
-  // Pasivo: cuentas originales + resultado (con signo invertido para mostrar positivo)
-  const pasivo = [
-    ...pasivoOriginal.map(a => ({ ...a, balance: -Number(a.balance) })),
-    ...(resultado129 ? [{ ...resultado129, balance: resultado }] : [])
+  // Para el PDF del Balance de Situación, todos los valores deben ser positivos
+  // El resultado del ejercicio va en el pasivo (cuenta 129)
+  const pasivoConResultado = [
+    ...pasivoOriginal.map(a => ({ ...a, balance: Math.abs(Number(a.balance)) })),
+    ...(resultado ? [{ id: 129, code: '129', name: 'Resultado del ejercicio', balance: Math.abs(resultado) }] : [])
   ].filter(a => Number(a.balance) !== 0);
 
-  const totalActivo = activo.reduce((sum, a) => sum + Number(a.balance), 0);
-  // Total pasivo con signo invertido para que muestre positivo
-  const totalPasivo = pasivoOriginal.reduce((sum, a) => sum + (-Number(a.balance)), 0) + resultado;
-  const totalPatrimonio = patrimonio.reduce((sum, a) => sum + Number(a.balance), 0);
+  // Calcular totales - todos positivos para el balance
+  const totalActivo = activo.reduce((sum, a) => sum + Math.abs(Number(a.balance)), 0);
+  const totalPasivo = pasivoOriginal.reduce((sum, a) => sum + Math.abs(Number(a.balance)), 0) + Math.abs(resultado);
+  const totalPatrimonio = patrimonio.reduce((sum, a) => sum + Math.abs(Number(a.balance)), 0);
   
   const balancingFigure = totalActivo - (totalPasivo + totalPatrimonio);
 
@@ -328,12 +322,12 @@ function generateIncomeStatementPDF(accounts) {
     return yPos;
   };
 
-  // Calcular totales
-  const totalIngresos = ingresos.reduce((sum, a) => sum + Number(a.balance), 0);
-  const totalGastos = gastos.reduce((sum, a) => sum + Number(a.balance), 0);
+  // Calcular totales - ingresos siempre positivos, gastos siempre negativos
+  const totalIngresos = ingresos.reduce((sum, a) => sum + Math.abs(Number(a.balance)), 0);
+  const totalGastos = gastos.reduce((sum, a) => sum + Math.abs(Number(a.balance)), 0);
   const resultado = totalIngresos - totalGastos;
 
-  // Dibujar secciones
+  // Dibujar secciones - ingresos positivos, gastos negativos
   yPos = drawTablePyG('INGRESOS', ingresos, totalIngresos, colorIngresos, false);
   yPos = drawTablePyG('GASTOS', gastos, totalGastos, colorGastos, true);
 
@@ -397,10 +391,13 @@ export default function Balance() {
   }, []);
 
   // Obtener el resultado del ejercicio (cuenta 129)
+  // Ingresos siempre positivos, gastos siempre negativos para PyG
   const ingresos = accounts.filter(a => a.account_type === 'ingreso');
   const gastos = accounts.filter(a => a.account_type === 'gasto');
-  const resultado = ingresos.reduce((sum, a) => sum + (Number(a.balance) || 0), 0) - 
-                    gastos.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+  // Ingresos como positivo, gastos como negativo
+  const totalIngresosPyG = ingresos.reduce((sum, a) => sum + Math.abs(Number(a.balance) || 0), 0);
+  const totalGastosPyG = gastos.reduce((sum, a) => sum + Math.abs(Number(a.balance) || 0), 0);
+  const resultado = totalIngresosPyG - totalGastosPyG;
   
   // Obtener las cuentas de patrimonio sin la 129 (resultado)
   const patrimonioSin129 = accounts.filter(a => a.account_type === 'patrimonio' && a.code !== '129');

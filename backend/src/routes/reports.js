@@ -40,6 +40,9 @@ router.get('/balance', authorize(['superadmin', 'contabilidad', 'tesoreria', 'co
     `;
     
     // Simpler query without the complex date filtering
+    // El saldo se calcula según el tipo de cuenta:
+    // - Activo y Gasto (grupo 6): saldo natural en el Debe (positivo si Debe > Haber)
+    // - Pasivo, Patrimonio e Ingreso (grupo 7): saldo natural en el Haber (positivo si Haber > Debe)
     const simpleQuery = `
       SELECT 
         a.id,
@@ -48,7 +51,10 @@ router.get('/balance', authorize(['superadmin', 'contabilidad', 'tesoreria', 'co
         a.type as account_type,
         COALESCE(SUM(jel.debit), 0) as total_debit,
         COALESCE(SUM(jel.credit), 0) as total_credit,
-        COALESCE(SUM(jel.debit), 0) - COALESCE(SUM(jel.credit), 0) as balance
+        CASE 
+          WHEN a.type IN ('activo', 'gasto') THEN COALESCE(SUM(jel.debit), 0) - COALESCE(SUM(jel.credit), 0)
+          ELSE COALESCE(SUM(jel.credit), 0) - COALESCE(SUM(jel.debit), 0)
+        END as balance
       FROM accounts a
       LEFT JOIN journal_entry_lines jel ON a.id = jel.account_id
       GROUP BY a.id, a.code, a.name, a.type
